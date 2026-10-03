@@ -23,21 +23,44 @@ jobs:
             echo "::error::EC2_SSH_KEY secret is not set! Please add your EC2 private key in GitHub repository settings -> Secrets and variables -> Actions."
             exit 1
           fi
+
           mkdir -p ~/.ssh
-          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+
+          # Strip Windows carriage returns (\r), strip outer wrapping quotes, ensure trailing newline
+          echo "$EC2_SSH_KEY" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" | tr -d '\r' | sed -e '$a\' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST || '13.127.244.35' }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          # Validate key with ssh-keygen
+          if ! ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub 2>&1; then
+            echo "::error::SSH key could not be decoded. Please verify you copied the entire .pem file including header and footer."
+            exit 1
+          fi
+
+          echo "✅ SSH private key successfully loaded and validated."
+
+          # Global SSH config to support all RSA signatures and avoid host key prompt
+          cat << 'EOF' > ~/.ssh/config
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            PubkeyAcceptedKeyTypes +ssh-rsa,rsa-sha2-256,rsa-sha2-512
+            HostKeyAlgorithms +ssh-rsa,rsa-sha2-256,rsa-sha2-512
+            ServerAliveInterval 30
+            ServerAliveCountMax 3
+            ConnectTimeout 15
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Verify SSH Connection
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
+          ssh -i ~/.ssh/id_rsa \
             ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }} \
             "echo '✅ Connected successfully to EC2 instance (13.127.244.35)'"
 
       - name: Synchronize Files to EC2
         run: |
           # Create target directory on EC2 if not present
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+          ssh -i ~/.ssh/id_rsa \
             ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }} \
             "mkdir -p /home/ubuntu/exam_portal_project"
 
@@ -50,11 +73,11 @@ jobs:
             --exclude '__pycache__' \
             --exclude '*.pyc' \
             --exclude 'powershell.cmd' \
-            -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" \
+            -e "ssh -i ~/.ssh/id_rsa" \
             ./ ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }}:/home/ubuntu/exam_portal_project/
 
       - name: Execute Deployment on EC2
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+          ssh -i ~/.ssh/id_rsa \
             ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }} \
             "chmod +x /home/ubuntu/exam_portal_project/scripts/deploy.sh && bash /home/ubuntu/exam_portal_project/scripts/deploy.sh"
