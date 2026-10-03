@@ -81,7 +81,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_rsa \
             ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }} \
-            "echo '✅ Connected successfully to EC2 instance (13.127.244.35)'"
+            "echo '✅ Connected successfully to EC2 instance (13.233.121.185)'"
 
       - name: Synchronize Files to EC2
         run: |
