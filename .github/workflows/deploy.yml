@@ -26,13 +26,39 @@ jobs:
 
           mkdir -p ~/.ssh
 
-          # Strip Windows carriage returns (\r), strip outer wrapping quotes, ensure trailing newline
-          echo "$EC2_SSH_KEY" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" | tr -d '\r' | sed -e '$a\' > ~/.ssh/id_rsa
+          RAW_KEY="$EC2_SSH_KEY"
+
+          # 1. Expand literal \n if present
+          if echo "$RAW_KEY" | grep -q '\\n'; then
+            echo "Notice: Detected literal \n in secret, converting to newlines."
+            RAW_KEY=$(printf '%b' "$RAW_KEY")
+          fi
+
+          # 2. Check if secret is Base64 encoded and decode it
+          if ! echo "$RAW_KEY" | grep -q "BEGIN"; then
+            echo "Notice: Secret does not contain 'BEGIN'. Attempting Base64 decode..."
+            B64_DECODED=$(echo "$RAW_KEY" | tr -d ' \r\n' | base64 -d 2>/dev/null || true)
+            if echo "$B64_DECODED" | grep -q "BEGIN"; then
+              echo "✅ Successfully decoded Base64 key."
+              RAW_KEY="$B64_DECODED"
+            fi
+          fi
+
+          # 3. Clean carriage returns (\r), outer quotes, and ensure trailing newline
+          echo "$RAW_KEY" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" | tr -d '\r' | sed -e '$a\' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          # Validate key with ssh-keygen
-          if ! ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub 2>&1; then
-            echo "::error::SSH key could not be decoded. Please verify you copied the entire .pem file including header and footer."
+          # 4. Diagnostics check
+          KEY_LINES=$(wc -l < ~/.ssh/id_rsa)
+          KEY_BYTES=$(wc -c < ~/.ssh/id_rsa)
+          echo "Key file size: $KEY_BYTES bytes, $KEY_LINES lines."
+          echo "First line: $(head -n 1 ~/.ssh/id_rsa)"
+          echo "Last line: $(tail -n 1 ~/.ssh/id_rsa)"
+
+          # 5. Validate key with ssh-keygen
+          if ! KEYGEN_OUT=$(ssh-keygen -y -P "" -f ~/.ssh/id_rsa 2>&1); then
+            echo "::error::ssh-keygen failed to validate private key:"
+            echo "$KEYGEN_OUT"
             exit 1
           fi
 
