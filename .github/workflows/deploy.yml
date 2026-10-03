@@ -1,0 +1,60 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to AWS EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          if [ -z "$EC2_SSH_KEY" ]; then
+            echo "::error::EC2_SSH_KEY secret is not set! Please add your EC2 private key in GitHub repository settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST || '13.127.244.35' }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Verify SSH Connection
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
+            ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }} \
+            "echo '✅ Connected successfully to EC2 instance (13.127.244.35)'"
+
+      - name: Synchronize Files to EC2
+        run: |
+          # Create target directory on EC2 if not present
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }} \
+            "mkdir -p /home/ubuntu/exam_portal_project"
+
+          # Sync project code using rsync
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude 'frontend/node_modules' \
+            --exclude 'backend/venv' \
+            --exclude 'backend/.venv' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            --exclude 'powershell.cmd' \
+            -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" \
+            ./ ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }}:/home/ubuntu/exam_portal_project/
+
+      - name: Execute Deployment on EC2
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }} \
+            "chmod +x /home/ubuntu/exam_portal_project/scripts/deploy.sh && bash /home/ubuntu/exam_portal_project/scripts/deploy.sh"

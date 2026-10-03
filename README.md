@@ -210,3 +210,28 @@ Questions can be managed via the trainer dashboard or imported via the API.
 - **Create new tests**: Configure duration, difficulty distribution, passing % via the Test Config page
 - **AWS-specific questions**: Add questions with topic "AWS Cloud" via the question manager
 - **Custom topics**: Any topic string is supported; update the TOPICS list in `QuestionsPage.tsx`
+
+---
+
+## CI/CD Deployment to AWS EC2
+
+This repository includes a GitHub Actions workflow (`.github/workflows/deploy.yml`) to automatically deploy to an AWS EC2 instance (`13.127.244.35`).
+
+### 1. Required GitHub Repository Secrets
+Go to **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
+
+| Secret Name | Description | Example |
+|-------------|-------------|---------|
+| `EC2_SSH_KEY` | Private SSH Key (`.pem` file content) used to connect to EC2 | `-----BEGIN RSA PRIVATE KEY-----...` |
+| `EC2_HOST` | *(Optional, default: `13.127.244.35`)* Server Public IP | `13.127.244.35` |
+| `EC2_USER` | *(Optional, default: `ubuntu`)* SSH username | `ubuntu` |
+
+### 2. EC2 Security Group Inbound Rules
+Ensure your AWS EC2 Security Group permits inbound traffic for:
+- **Port 22 (SSH)**: Accessible by GitHub Actions (Source: `0.0.0.0/0`)
+- **Port 5173 (Frontend)**: Accessible by students/trainers (Source: `0.0.0.0/0`)
+- **Port 8000 (Backend API)**: Accessible by browsers (Source: `0.0.0.0/0`)
+
+### 3. Automatic Deployment
+Pushing to the `main` branch triggers automatic synchronization, Docker container build, database migrations, and health checks on EC2.
+
