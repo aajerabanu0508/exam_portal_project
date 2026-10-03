@@ -80,14 +80,14 @@ jobs:
       - name: Verify SSH Connection
         run: |
           ssh -i ~/.ssh/id_rsa \
-            ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }} \
+            ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.233.121.185' }} \
             "echo '✅ Connected successfully to EC2 instance (13.233.121.185)'"
 
       - name: Synchronize Files to EC2
         run: |
           # Create target directory on EC2 if not present
           ssh -i ~/.ssh/id_rsa \
-            ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }} \
+            ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.233.121.185' }} \
             "mkdir -p /home/ubuntu/exam_portal_project"
 
           # Sync project code using rsync
@@ -100,10 +100,10 @@ jobs:
             --exclude '*.pyc' \
             --exclude 'powershell.cmd' \
             -e "ssh -i ~/.ssh/id_rsa" \
-            ./ ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }}:/home/ubuntu/exam_portal_project/
+            ./ ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.233.121.185' }}:/home/ubuntu/exam_portal_project/
 
       - name: Execute Deployment on EC2
         run: |
           ssh -i ~/.ssh/id_rsa \
-            ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.127.244.35' }} \
+            ${{ secrets.EC2_USER || 'ubuntu' }}@${{ secrets.EC2_HOST || '13.233.121.185' }} \
             "chmod +x /home/ubuntu/exam_portal_project/scripts/deploy.sh && bash /home/ubuntu/exam_portal_project/scripts/deploy.sh"
